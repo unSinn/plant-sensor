@@ -6,23 +6,31 @@
 #include <Wire.h>
 
 // MOISTURE SENSOR
-#define MOISTURE_PIN  A1
+#define MOISTURE_PIN1  A1
+#define MOISTURE_PIN2  A2
+#define MOISTURE_PIN3  A3
+
+#define LED_RED 9
+#define LED_GREEN 10
+#define LED_BLUE 11
 
 // LIGHTSENSOR
 #define LIGHT_PIN A0
 
 // BAROMETER
 Barometer myBarometer;
-boolean first;
 
 // HUMIDITY
 #define DHT22_PIN 2
 DHT22 myDHT22(DHT22_PIN);
 
 void setup(){
-  Serial.begin(9600);
+  Serial.begin(57600);
   myBarometer.init();
-
+  
+  pinMode(LED_RED, OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_BLUE, OUTPUT);
 }
 
 // {{"name":"b-temp"}, {"value":"13.12"}, {"Munit":"deg C"} }
@@ -71,10 +79,18 @@ void printLightSensor(){
   sendJSONValue("l-light", toString(rlsens), "mylux");
 }
 
-void printMoistureSensor(){
-  int moistureValue = analogRead(MOISTURE_PIN);
+void readMoistureSensors(){
+  printMoisture(MOISTURE_PIN1);
+  printMoisture(MOISTURE_PIN2);
+  printMoisture(MOISTURE_PIN3);
+}
+
+void printMoisture(int pin){
+  int moistureValue;
+  String pinstr = String(pin-4, DEC);
+  moistureValue = analogRead(pin);
   float moisturePercent = moistureValue / 950.0 *100.0;
-  sendJSONValue("m-moisture", toString(moisturePercent), "%");
+  sendJSONValue(String("m-moisture"+pinstr), toString(moisturePercent), "%");
 }
 
 void printHumidity(){
@@ -88,20 +104,49 @@ void printHumidity(){
   }
 }
 
-void loop()
+void setColor (unsigned char red, unsigned char green, unsigned char blue)  
 {
-  first=true;
-
-  printBarometer();
-  printLightSensor();
-  printMoistureSensor();
-  printHumidity();
-  
-  delay(2000);
+  analogWrite(LED_RED, red);
+  analogWrite(LED_GREEN, green);
+  analogWrite(LED_BLUE, blue);
 }
 
+void loop()
+{
+  printBarometer();
+  printLightSensor();
+  readMoistureSensors();
+  printHumidity();
+  
+  while(Serial.available() > 0){
+    char charByte = Serial.read();
+    if (charByte == 'S'){
+      int value = Serial.read();
+      // Do something with value
+    }
+  }
+  
 
+  setColor(255, 0, 0);    //red
+  delay(500);   
+  setColor(0,255, 0);    // green
+  delay(500);    
+  setColor(0, 0,255);    //  blue
+  delay(500);   
+  
+  setColor(255,255,0);    //  yellow
+  delay(500);    
+  setColor(255,255,255);    //  white
+  delay(500);    
+  setColor(128,0,255);    // t purple
+  delay(500);    
+  setColor(175,75,148);    //  pink
+  delay(500);    
+  setColor(250,50,10);    // orange
+  delay(500);    
+  
+  delay(1000);    // delay for 1 second
 
-
-
+  delay(2000);
+}
 
