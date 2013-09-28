@@ -13,6 +13,7 @@
 #define LED_RED 9
 #define LED_GREEN 10
 #define LED_BLUE 11
+#define MOISTURE_VCC 12
 
 // LIGHTSENSOR
 #define LIGHT_PIN A0
@@ -27,6 +28,8 @@ DHT22 myDHT22(DHT22_PIN);
 void setup(){
   Serial.begin(57600);
   myBarometer.init();
+  
+  pinMode(MOISTURE_VCC, OUTPUT);
   
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
@@ -80,9 +83,13 @@ void printLightSensor(){
 }
 
 void readMoistureSensors(){
+  digitalWrite(MOISTURE_VCC, HIGH);
+  delay(50);
   printMoisture(MOISTURE_PIN1);
   printMoisture(MOISTURE_PIN2);
   printMoisture(MOISTURE_PIN3);
+  delay(50);
+  digitalWrite(MOISTURE_VCC, LOW);
 }
 
 void printMoisture(int pin){
