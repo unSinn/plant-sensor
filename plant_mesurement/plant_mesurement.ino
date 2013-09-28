@@ -120,33 +120,21 @@ void loop()
   
   while(Serial.available() > 0){
     char charByte = Serial.read();
-    if (charByte == 'S'){
+    if (charByte == 'R'){
       int value = Serial.read();
-      // Do something with value
+      setColor(value, 0, 0);
+    }
+    if (charByte == 'G'){
+      int value = Serial.read();
+      setColor(0, value, 0);
+    }
+    if (charByte == 'B'){
+      int value = Serial.read();
+      setColor(0, 0, value);
     }
   }
   
-
-  setColor(255, 0, 0);    //red
-  delay(500);   
-  setColor(0,255, 0);    // green
-  delay(500);    
-  setColor(0, 0,255);    //  blue
-  delay(500);   
+  delay(1000);
   
-  setColor(255,255,0);    //  yellow
-  delay(500);    
-  setColor(255,255,255);    //  white
-  delay(500);    
-  setColor(128,0,255);    // t purple
-  delay(500);    
-  setColor(175,75,148);    //  pink
-  delay(500);    
-  setColor(250,50,10);    // orange
-  delay(500);    
-  
-  delay(1000);    // delay for 1 second
-
-  delay(2000);
 }
 
