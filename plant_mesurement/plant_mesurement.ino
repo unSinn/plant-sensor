@@ -4,32 +4,67 @@
 #include <DHT22.h>
 #include "Barometer.h"
 #include <Wire.h>
+#include "TM1637.h"
+
+// Number Display
+#define CLK 2 // Port D2 on Grove Shield
+#define DIO 3
+TM1637 tm1637(CLK,DIO);
+
+// Displaying another value on the NumberDisplay every Second
+#define DISPLAYINTERVAL 1000
+#define NUMBEROFDISPLAYFUNCTIONS 5
+unsigned long currentMillis;
+unsigned long lastChangeOnDisplayMillis;
+int currentDisplay;
+
+// Interval of SerialCommunication
+#define SERIALINTERVAL 2000
+unsigned long lastSerialSendMillis;
 
 // MOISTURE SENSOR
+int moistureValue;
 #define MOISTURE_PIN1  A1
 #define MOISTURE_PIN2  A2
 #define MOISTURE_PIN3  A3
+#define MOISTURE_VCC 12
 
+// LEDs
 #define LED_RED 9
 #define LED_GREEN 10
 #define LED_BLUE 11
-#define MOISTURE_VCC 12
 
 // LIGHTSENSOR
 #define LIGHT_PIN A0
+float lightSensor;
 
 // BAROMETER
 Barometer myBarometer;
+float b_temperature;
+float b_pressure;
+float b_altitude;
+float b_atm;
 
 // HUMIDITY
 #define DHT22_PIN 2
 DHT22 myDHT22(DHT22_PIN);
+float dht_temperature;
+float dht_humidity;
+
+// Raspberry Heartbeat/Clock
+#define RASPBERRYWATCHTIME 120000
+int raspberry_hour;
+int raspberry_minute;
+unsigned long lastRaspberryTimeMillis = 0;
 
 void setup(){
   Serial.begin(57600);
   myBarometer.init();
   
   pinMode(MOISTURE_VCC, OUTPUT);
+  
+  tm1637.init();
+  tm1637.set(BRIGHT_TYPICAL);//BRIGHT_TYPICAL = 2,BRIGHT_DARKEST = 0,BRIGHTEST = 7;
   
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
@@ -65,21 +100,21 @@ String toString(float f){
 }
 
 void printBarometer(){
-  float temperature = myBarometer.bmp085GetTemperature(myBarometer.bmp085ReadUT()); //Get the temperature, bmp085ReadUT MUST be called first
-  float pressure = myBarometer.bmp085GetPressure(myBarometer.bmp085ReadUP());//Get the pressure
-  float altitude = myBarometer.calcAltitude(pressure); //Uncompensated caculation - in Meters 
-  float atm = pressure / 101325; 
+  b_temperature = myBarometer.bmp085GetTemperature(myBarometer.bmp085ReadUT()); //Get the temperature, bmp085ReadUT MUST be called first
+  b_pressure = myBarometer.bmp085GetPressure(myBarometer.bmp085ReadUP());//Get the pressure
+  b_altitude = myBarometer.calcAltitude(b_pressure); //Uncompensated caculation - in Meters 
+  b_atm = b_pressure / 101325; 
 
-  sendJSONValue("b-temp", toString(temperature), "deg C");
-  sendJSONValue("b-pres", toString(pressure), "Pa");
-  sendJSONValue("b-rala", toString(atm), "atm"); //ralated_atmosphere
-  sendJSONValue("b-alti", toString(altitude), "m");
+  sendJSONValue("b-temp", toString(b_temperature), "deg C");
+  sendJSONValue("b-pres", toString(b_pressure), "Pa");
+  sendJSONValue("b-rala", toString(b_atm), "atm"); //ralated_atmosphere
+  sendJSONValue("b-alti", toString(b_altitude), "m");
 }
 
 void printLightSensor(){
   int sensorValue = analogRead(LIGHT_PIN);
-  float rlsens=(float)(1023-sensorValue)*10/sensorValue;
-  sendJSONValue("l-light", toString(rlsens), "mylux");
+  float lightSensor=(float)(1023-sensorValue)*10/sensorValue;
+  sendJSONValue("l-light", toString(lightSensor), "mylux");
 }
 
 void readMoistureSensors(){
@@ -93,7 +128,6 @@ void readMoistureSensors(){
 }
 
 void printMoisture(int pin){
-  int moistureValue;
   String pinstr = String(pin-4, DEC);
   moistureValue = analogRead(pin);
   float moisturePercent = moistureValue / 950.0 *100.0;
@@ -104,13 +138,14 @@ void printHumidity(){
   DHT22_ERROR_t errorCode;
   errorCode = myDHT22.readData();
   if(errorCode == DHT_ERROR_NONE){
-    float temperature = myDHT22.getTemperatureC();
-    float humidity = myDHT22.getHumidity();
-    sendJSONValue("h-humidity", toString(humidity), "% RH");
-    sendJSONValue("h-temperature", toString(temperature), "deg C");
+    dht_temperature = myDHT22.getTemperatureC();
+    dht_humidity = myDHT22.getHumidity();
+    sendJSONValue("h-temperature", toString(dht_temperature), "deg C");
+    sendJSONValue("h-humidity", toString(dht_humidity), "% RH");
   }
 }
 
+// LED Functions
 void setColor (unsigned char red, unsigned char green, unsigned char blue)  
 {
   analogWrite(LED_RED, red);
@@ -118,15 +153,88 @@ void setColor (unsigned char red, unsigned char green, unsigned char blue)
   analogWrite(LED_BLUE, blue);
 }
 
+// Display Functions
+void displayMoisturePercent(){
+  displayValue(moistureValue);
+}
+void displayLightValue(){
+  displayValue((int)lightSensor);
+}
+void displayHumidity(){
+  displayValue((int)dht_humidity);
+}
+void displayTemperature(){
+  displayValue((int)b_temperature);
+}
+
+void displayRaspberryTime(){
+  tm1637.display(0, raspberry_hour / 10);
+  tm1637.display(1, raspberry_hour % 10); 
+  tm1637.display(2, raspberry_minute / 10);
+  tm1637.display(3, raspberry_minute % 10);
+  tm1637.point(POINT_ON);
+}
+
+void displayValue(int value){
+  tm1637.display(0, (int)(value / 1000));
+  tm1637.display(1, (int)(value / 100)%10); 
+  tm1637.display(2, (int)(value / 10)%10);
+  tm1637.display(3, value % 10);
+  tm1637.point(POINT_OFF); 
+}
+
 void loop()
 {
-  printBarometer();
-  printLightSensor();
-  readMoistureSensors();
-  printHumidity();
+  currentMillis = millis();
+  
+  if(currentMillis - lastSerialSendMillis > SERIALINTERVAL){
+    printBarometer();
+    printLightSensor();
+    readMoistureSensors();
+    //printHumidity();
+    lastSerialSendMillis = currentMillis;
+  }
+  
+  if(currentMillis - lastChangeOnDisplayMillis > DISPLAYINTERVAL){
+    switch(currentDisplay){
+      case 1: 
+        displayMoisturePercent();
+        break;
+      case 2: 
+        displayLightValue();
+        break;
+      case 3: 
+        displayHumidity();
+        break;
+      case 4: 
+        displayTemperature();
+        break;
+      case 5: 
+        displayRaspberryTime();
+        break;
+    }
+    
+    currentDisplay++; // switch to next display function
+    if(currentDisplay > NUMBEROFDISPLAYFUNCTIONS){
+       currentDisplay = 1;
+    }
+    lastChangeOnDisplayMillis = currentMillis;
+  }
+  
+  // Raspberry Watchdog
+  if(currentMillis - lastRaspberryTimeMillis > RASPBERRYWATCHTIME){
+    setColor(255, 0, 0);
+  }
+  
   
   while(Serial.available() > 0){
     char charByte = Serial.read();
+    
+    if (charByte == 'T'){
+      raspberry_hour = Serial.read();
+      raspberry_minute = Serial.read();
+      lastRaspberryTimeMillis = currentMillis;
+    }
     if (charByte == 'R'){
       int value = Serial.read();
       setColor(value, 0, 0);
@@ -140,8 +248,6 @@ void loop()
       setColor(0, 0, value);
     }
   }
-  
-  delay(1000);
   
 }
 
