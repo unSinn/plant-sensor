@@ -12,14 +12,14 @@
 TM1637 tm1637(CLK,DIO);
 
 // Displaying another value on the NumberDisplay every Second
-#define DISPLAYINTERVAL 1000
-#define NUMBEROFDISPLAYFUNCTIONS 5
+#define DISPLAYINTERVAL 2000
+#define NUMBEROFDISPLAYFUNCTIONS 6
 unsigned long currentMillis;
 unsigned long lastChangeOnDisplayMillis;
-int currentDisplay;
+int currentDisplay = 1;
 
 // Interval of SerialCommunication
-#define SERIALINTERVAL 2000
+#define SERIALINTERVAL 30000
 unsigned long lastSerialSendMillis;
 
 // MOISTURE SENSOR
@@ -46,7 +46,7 @@ float b_altitude;
 float b_atm;
 
 // HUMIDITY
-#define DHT22_PIN 2
+#define DHT22_PIN 3
 DHT22 myDHT22(DHT22_PIN);
 float dht_temperature;
 float dht_humidity;
@@ -80,6 +80,7 @@ void sendJSONValue(String name, String value, String unit){
   Serial.print(",");
   sendJSONAttribute("unit", unit);
   Serial.print("}\n");
+  Serial.flush();
 }
 
 // {"name":"value"}
@@ -160,27 +161,45 @@ void displayMoisturePercent(){
 void displayLightValue(){
   displayValue((int)lightSensor);
 }
-void displayHumidity(){
-  displayValue((int)dht_humidity);
+
+void displayTemperature_Inside(){
+  displayTemperature((int)dht_temperature);
 }
-void displayTemperature(){
-  displayValue((int)b_temperature);
+
+void displayTemperature_Outside(){
+  displayTemperature((int)b_temperature);
 }
 
 void displayRaspberryTime(){
+  tm1637.point(POINT_ON);
   tm1637.display(0, raspberry_hour / 10);
   tm1637.display(1, raspberry_hour % 10); 
   tm1637.display(2, raspberry_minute / 10);
   tm1637.display(3, raspberry_minute % 10);
-  tm1637.point(POINT_ON);
+}
+
+void displayTemperature(int temp){
+  tm1637.point(POINT_OFF); 
+  tm1637.display(0, temp / 10);
+  tm1637.display(1, temp % 10); 
+  tm1637.display(2, 0x7f);
+  tm1637.display(3, 12);
+}
+
+void displayHumidity(){
+  tm1637.point(POINT_OFF); 
+  tm1637.display(0, (int)dht_humidity / 10);
+  tm1637.display(1, (int)dht_humidity % 10); 
+  tm1637.display(2, 0x7f);
+  tm1637.display(3, 15);
 }
 
 void displayValue(int value){
+  tm1637.point(POINT_OFF); 
   tm1637.display(0, (int)(value / 1000));
   tm1637.display(1, (int)(value / 100)%10); 
   tm1637.display(2, (int)(value / 10)%10);
   tm1637.display(3, value % 10);
-  tm1637.point(POINT_OFF); 
 }
 
 void loop()
@@ -191,46 +210,16 @@ void loop()
     printBarometer();
     printLightSensor();
     readMoistureSensors();
-    //printHumidity();
+    printHumidity();
     lastSerialSendMillis = currentMillis;
   }
   
-  if(currentMillis - lastChangeOnDisplayMillis > DISPLAYINTERVAL){
-    switch(currentDisplay){
-      case 1: 
-        displayMoisturePercent();
-        break;
-      case 2: 
-        displayLightValue();
-        break;
-      case 3: 
-        displayHumidity();
-        break;
-      case 4: 
-        displayTemperature();
-        break;
-      case 5: 
-        displayRaspberryTime();
-        break;
-    }
-    
-    currentDisplay++; // switch to next display function
-    if(currentDisplay > NUMBEROFDISPLAYFUNCTIONS){
-       currentDisplay = 1;
-    }
-    lastChangeOnDisplayMillis = currentMillis;
-  }
-  
-  // Raspberry Watchdog
-  if(currentMillis - lastRaspberryTimeMillis > RASPBERRYWATCHTIME){
-    setColor(255, 0, 0);
-  }
-  
-  
-  while(Serial.available() > 0){
+  while(Serial.available()>2){
     char charByte = Serial.read();
-    
     if (charByte == 'T'){
+      while(Serial.available()<2){
+        // wait for the other 2 bytes to come in
+      }
       raspberry_hour = Serial.read();
       raspberry_minute = Serial.read();
       lastRaspberryTimeMillis = currentMillis;
@@ -248,6 +237,39 @@ void loop()
       setColor(0, 0, value);
     }
   }
+
+  if(currentMillis - lastRaspberryTimeMillis > RASPBERRYWATCHTIME){
+   setColor(255, 0, 0);
+  }
   
+  if(currentMillis - lastChangeOnDisplayMillis > DISPLAYINTERVAL){
+    switch(currentDisplay){
+      case 1: 
+        displayMoisturePercent();
+        break;
+      case 2: 
+        displayLightValue();
+        break;
+      case 3: 
+        displayHumidity();
+        break;
+      case 4: 
+        displayTemperature_Inside();
+        break;
+      case 5: 
+        displayTemperature_Outside();
+        break;
+      case 6: 
+        displayRaspberryTime();
+        break;
+    }
+    
+    currentDisplay++; // switch to next display function
+    if(currentDisplay > NUMBEROFDISPLAYFUNCTIONS){
+       currentDisplay = 1;
+    }
+    lastChangeOnDisplayMillis = currentMillis;
+  }
 }
+
 
