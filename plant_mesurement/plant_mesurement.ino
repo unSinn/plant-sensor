@@ -1,6 +1,8 @@
 /* Plant Mesurement Node
 *  Requires Barometer_Sensor Library by http://www.seeedstudio.com 
- */
+*  Requires DHT22 Library https://github.com/nethoncho/Arduino-DHT22
+*  Requires NumberDisplay Libraries http://www.seeedstudio.com/wiki/Grove_-_4-Digit_Display
+*/
 #include <DHT22.h>
 #include "Barometer.h"
 #include <Wire.h>
